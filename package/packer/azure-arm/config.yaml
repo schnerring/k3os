@@ -1,0 +1,66 @@
+ssh_authorized_keys:
+- ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCv5aaoAuCGDxN4JUonqtENIfEKHfdfHKrwZAIY8h9OJLINswf9N+z/VAEHBoh1CxRG+sVSAEA3MQjnI+NcYPqrTPvdRxvHkZbmPYbrajGsmrA9QEqlO86yq6t1Bg0zeJrUXchwiqgOpjRYVZCmIom3Ex8PG+UDddvYGZcgxh5TIhxiJe8xwaIOKyxf63gVWtex7iVRgH4wcXtM+4f6FQnC5e4nJ1l511IGUxz4pctQLAcJzVuPr6a4Fn6Al1COCDsDXMJpA6R21SqmXhl4mFNTK5UShIS3LQ0vGjZ18Dd/bj+RtISeweZ9tFFhtpcGOd1LkQ+3kGVPPXQW6Td3Vd+DiO7274+MtDP7ix3je2wm1KUVqJhf3/Hea7GSYNRb4aIkpWSeARK5Ngmv//oZS50yCSkROhsNuNpQLNQVXfgVNV/QWPWXWAKnfui2Mm/v9KzYII7s6y5P71HZ5qPU0Wp7H8T9roLjJs9fl/JErTWLTqfU96FIp/1psgY9DAp4A8Mcm07y8D1UD0lxwZZr5d+xEBuRNhW8cDrWm8tyK7Ql5PiR9cOwhKHNg3MlFHVDMREue1EGCIPgBVVHZo+u//0Jf8RtX8DLgUVOnAPrEpljRYu2lou64o07HF/Y/amqWLP+7DVNUHyN72W2KifNW8G6/tNuzmtxil7AP+7CKtReLw== schnerring@windows-desktop
+write_files:
+- content: |
+    #!/usr/bin/env bash
+
+    # exit if already provisioned
+    [[ -f /usr/local/azure/provisioned ]] && exit 0
+
+    # mitigate Azure latency issues
+    sleep 120
+
+    # mount Azure-provided CD containing initial instance metadata
+    mount -o ro -t udf /dev/cdrom /media/cdrom
+
+    # grab user-data from the CD's ovf-env.xml file
+    cp /media/cdrom/ovf-env.xml /usr/local/azure/ovf-env.xml
+    USER_DATA_BASE64=$(grep "CustomData" </usr/local/azure/ovf-env.xml | sed "s/.*<CustomData>\(.*\)<\/CustomData>.*/\1/")
+
+    if [[ -n "$USER_DATA_BASE64" ]]; then
+        # decode
+        USER_DATA=$(printf '%s' "$USER_DATA_BASE64" | base64 --decode 2>/dev/null)
+        # append to k3OS configuration
+        printf '\n%s' "$USER_DATA" >>/var/lib/rancher/k3os/config.yaml
+    fi
+
+    # query ContainerId and InstanceId from WireServer
+    GOAL_STATE=$(curl -X GET -H "x-ms-version: 2012-11-30" "http://168.63.129.16/machine?comp=goalstate" | tr -d "\r")
+    CONTAINER_ID=$(printf '%s' "$GOAL_STATE" | grep "ContainerId" | sed "s/.*<ContainerId>\(.*\)<\/ContainerId>.*/\1/")
+    INSTANCE_ID=$(printf '%s' "$GOAL_STATE"  | grep "InstanceId"  | sed "s/.*<InstanceId>\(.*\)<\/InstanceId>.*/\1/")
+
+    # construct XML response
+    read -r -d '' REPORT_READY_XML <<EOF
+    <Health>
+        <GoalStateIncarnation>1</GoalStateIncarnation>
+        <Container>
+        <ContainerId>CONTAINER_ID</ContainerId>
+        <RoleInstanceList>
+            <Role>
+            <InstanceId>INSTANCE_ID</InstanceId>
+            <Health>
+                <State>Ready</State>
+            </Health>
+            </Role>
+        </RoleInstanceList>
+        </Container>
+    </Health>
+    EOF
+    REPORT_READY_XML=$(printf '%s' "${REPORT_READY_XML}" | sed "s~CONTAINER_ID~${CONTAINER_ID}~;s~INSTANCE_ID~${INSTANCE_ID}~")
+
+    # post XML response to WireServer
+    curl \
+        -X POST \
+        -H "x-ms-version: 2012-11-30" \
+        -H "x-ms-agent-name: WALinuxAgent" \
+        -H "Content-Type: text/xml;charset=utf-8" \
+        -d "${REPORT_READY_XML}" \
+        "http://168.63.129.16/machine?comp=health"
+
+    # disable script for subsequent reboots with marker file
+    touch /usr/local/azure/provisioned
+  owner: root
+  path: /usr/local/azure/provision.sh
+  permissions: '0755'
+run_cmd:
+- "/usr/local/azure/provision.sh >> /usr/local/azure/log.txt"
