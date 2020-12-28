@@ -38,7 +38,7 @@ Create `./variables.json` file and replace values accordingly:
 ## Build
 
 ``` shell
-packer build -var-file=./variables.json template.pkr.hcl
+packer build -var-file=variables.json template.pkr.hcl
 ```
 
 ## Deploy
@@ -50,14 +50,14 @@ ssh_authorized_keys:
 - github:schnerring
 ```
 
-Deploy to Azure:
+Make sure to `export` the `subscription_id`, then deploy:
 
 ``` shell
 az group create --name rg-k3os
 az vm create \
     --resource-group rg-k3os \
     --name vm-k3os \
-    --image "/subscriptions/${PKG_VAR_subscription_id}/resourceGroups/rg-packer-images/providers/Microsoft.Compute/images/mimg-k3os-v0.19.4-dev.5" \
+    --image "/subscriptions/${subscription_id}/resourceGroups/rg-packer-images/providers/Microsoft.Compute/images/mimg-k3os-v0.19.4-dev.5" \
     --size Standard_B1s \
     --admin-username rancher \
     --custom-data ./user-data.txt
