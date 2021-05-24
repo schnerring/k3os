@@ -47,7 +47,7 @@ Create `./user-data.txt` file:
 
 ```text
 ssh_authorized_keys:
-- github:schnerring
+  - github:schnerring
 ```
 
 Make sure to `export` the `subscription_id`, then deploy:
@@ -60,7 +60,9 @@ az vm create \
     --image "/subscriptions/${subscription_id}/resourceGroups/packer-images-rg/providers/Microsoft.Compute/images/k3os-v0.19.4-dev.5-mimg" \
     --size Standard_B1s \
     --admin-username rancher \
-    --custom-data ./user-data.txt
+    --user-data ./user-data.txt
 ```
 
 `--admin-username rancher` reports the VM's only correct username `rancher` to the Azure platform, since k3OS doesn't allow changing it.
+
+Note that `--user-data` is not yet supported by the Azure CLI. Until then it is best to resort to using the Azure Portal instead.
