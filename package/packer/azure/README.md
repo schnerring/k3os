@@ -19,7 +19,7 @@ az account show --query "{ subscription_id: id }"
 Create Azure resource group for Packer images:
 
 ```shell
-az group create --name rg-packer-images
+az group create --name packer-images-rg
 ```
 
 ## Set Template Variables

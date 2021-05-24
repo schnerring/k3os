@@ -25,7 +25,7 @@ variable "region" {
 }
 
 locals {
-  k3os_version            = "v0.19.4-dev.5"
+  k3os_version            = "azure-test"
   k3os_iso_url            = "https://github.com/rancher/k3os/releases/download/${local.k3os_version}/k3os-amd64.iso"
   k3os_install_script_url = "https://raw.githubusercontent.com/rancher/k3os/${local.k3os_version}/install.sh"
 }
